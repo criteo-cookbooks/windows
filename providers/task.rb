@@ -18,226 +18,128 @@
 # limitations under the License.
 #
 
-require 'chef/mixin/shell_out'
-include Chef::Mixin::ShellOut
-
 use_inline_resources
 
+def whyrun_supported?
+  true
+end
+
 action :create do
-  if @current_resource.exists && (not (task_need_update? || @new_resource.force))
-    Chef::Log.info "#{@new_resource} task already exists - nothing to do"
-  else
-    validate_user_and_password
-    validate_interactive_setting
-    validate_create_day
-
-    schedule  = @new_resource.frequency == :on_logon ? "ONLOGON" : @new_resource.frequency
-    frequency_modifier_allowed = [:minute, :hourly, :daily, :weekly, :monthly]
-    options = Hash.new
-    options['F'] = '' if @new_resource.force || task_need_update?
-    options['SC'] = schedule
-    options['MO'] = @new_resource.frequency_modifier if frequency_modifier_allowed.include?(@new_resource.frequency)
-    options['SD'] = @new_resource.start_day unless @new_resource.start_day.nil?
-    options['ST'] = @new_resource.start_time unless @new_resource.start_time.nil?
-    options['TR'] = "\"#{@new_resource.command}\" "
-    options['RU'] = @new_resource.user
-    options['RP'] = @new_resource.password if use_password?
-    options['RL'] = 'HIGHEST' if @new_resource.run_level == :highest
-    options['IT'] = '' if @new_resource.interactive_enabled
-    options['D'] = @new_resource.day if @new_resource.day
-
-    run_schtasks 'CREATE', options
-    new_resource.updated_by_last_action true
-    Chef::Log.info "#{@new_resource} task created"
-  end
+  create_or_update_task :create
 end
 
 action :run do
-  if @current_resource.exists
-    if @current_resource.status == :running
-      Chef::Log.info "#{@new_resource} task is currently running, skipping run"
-    else
-      run_schtasks 'RUN'
-      new_resource.updated_by_last_action true
-      Chef::Log.info "#{@new_resource} task ran"
-    end
-  else
-    Chef::Log.debug "#{@new_resource} task doesn't exists - nothing to do"
+  windows_advanced_task new_resource.task_name do
+    action :start
   end
 end
 
 action :change do
-  if @current_resource.exists
-    validate_user_and_password
-    validate_interactive_setting
-
-    options = Hash.new
-    options['TR'] = "\"#{@new_resource.command}\" " if @new_resource.command
-    options['RU'] = @new_resource.user if @new_resource.user
-    options['RP'] = @new_resource.password if @new_resource.password
-    options['SD'] = @new_resource.start_day unless @new_resource.start_day.nil?
-    options['ST'] = @new_resource.start_time unless @new_resource.start_time.nil?
-    options['IT'] = '' if @new_resource.interactive_enabled
-
-    run_schtasks 'CHANGE', options
-    new_resource.updated_by_last_action true
-    Chef::Log.info "Change #{@new_resource} task ran"
-  else
-    Chef::Log.debug "#{@new_resource} task doesn't exists - nothing to do"
-  end
+  create_or_update_task :update
 end
 
 action :delete do
-  if @current_resource.exists
-	  # always need to force deletion
-    run_schtasks 'DELETE', {'F' => ''}
-    new_resource.updated_by_last_action true
-    Chef::Log.info "#{@new_resource} task deleted"
-  else
-    Chef::Log.debug "#{@new_resource} task doesn't exists - nothing to do"
+  windows_advanced_task new_resource.task_name do
+    action :delete
   end
 end
 
 action :end do
-  if @current_resource.exists
-    if @current_resource.status != :running
-      Chef::Log.debug "#{@new_resource} is not running - nothing to do"
-    else
-      run_schtasks 'END'
-      @new_resource.updated_by_last_action true
-      Chef::Log.info "#{@new_resource} task ended"
-    end
-  else
-    Chef::Log.fatal "#{@new_resource} task doesn't exist - nothing to do"
-    raise Errno::ENOENT, "#{@new_resource}: task does not exist, cannot end"
+  windows_advanced_task new_resource.task_name do
+    action :stop
   end
 end
 
 action :enable do
-  if @current_resource.exists
-    if @current_resource.enabled
-      Chef::Log.debug "#{@new_resource} already enabled - nothing to do"
-    else
-      run_schtasks 'CHANGE', {'ENABLE' => ''}
-      @new_resource.updated_by_last_action true
-      Chef::Log.info "#{@new_resource} task enabled"
-    end
-  else
-    Chef::Log.fatal "#{@new_resource} task doesn't exist - nothing to do"
-    raise Errno::ENOENT, "#{@new_resource}: task does not exist, cannot enable"
+  windows_advanced_task new_resource.task_name do
+    action :enable
   end
 end
 
 action :disable do
-  if @current_resource.exists
-    if @current_resource.enabled
-      run_schtasks 'CHANGE', {'DISABLE' => ''}
-      @new_resource.updated_by_last_action true
-      Chef::Log.info "#{@new_resource} task disabled"
-    else
-      Chef::Log.debug "#{@new_resource} already disabled - nothing to do"
-    end
-  else
-    Chef::Log.debug "#{@new_resource} task doesn't exist - nothing to do"
+  windows_advanced_task new_resource.task_name do
+    action :disable
   end
-end
-
-
-def load_current_resource
-  @current_resource = Chef::Resource::WindowsTask.new(@new_resource.name)
-  @current_resource.task_name(@new_resource.task_name)
-
-
-  pathed_task_name = @new_resource.task_name[0,1] == '\\' ? @new_resource.task_name : @new_resource.task_name.prepend('\\')
-  task_hash = load_task_hash(@current_resource.task_name)
-  if task_hash[:TaskName] == pathed_task_name
-    @current_resource.exists = true
-    if task_hash[:Status] == "Running"
-      @current_resource.status = :running
-    end
-    if task_hash[:ScheduledTaskState] == "Enabled"
-      @current_resource.enabled = true
-    end
-    @current_resource.cwd(task_hash[:Folder])
-    @current_resource.command(task_hash[:TaskToRun])
-    @current_resource.user(task_hash[:RunAsUser])
-  end if task_hash.respond_to? :[]
 end
 
 private
-def run_schtasks(task_action, options={})
-  cmd = "schtasks /#{task_action} /TN \"#{@new_resource.task_name}\" "
-  options.keys.each do |option|
-    cmd += "/#{option} #{options[option]} "
+
+DAYS_VALUE = { 'SUN' => 1, 'MON' => 2, 'TUE' => 4, 'WED' => 8, 'THU' => 16, 'FRI' => 32, 'SAT' => 64, '*' => '127' }
+TRIGGER_MAP = { once: :time, minute: :time, hourly: :time, on_logon: :logon, onstart: :boot, on_idle: :idle }
+
+def formated_start_boundary
+  day = new_resource.start_day || DateTime.now.strftime('%d/%m/%Y')
+  time = new_resource.start_time || DateTime.now.strftime('%H:%M')
+
+  DateTime.strptime("#{day} #{time}", '%d/%m/%Y %H:%M').strftime('%Y-%m-%dT%H:%M:%S')
+end
+
+def create_or_update_task(chef_action)
+  # can't call below helpers from the windows_advanced_task block
+  trigger = compute_trigger
+  logon_type = compute_logon_type
+  exec_action = compute_exec_action
+
+  windows_advanced_task new_resource.task_name do
+    action        chef_action
+    exec_actions  exec_action
+    force         new_resource.force
+    logon_type    logon_type
+    password      new_resource.password if [:interactive_token_or_password, :password].include?(logon_type)
+    run_level     new_resource.run_level
+    triggers      trigger
+    user          new_resource.user
   end
-  Chef::Log.debug("running: ")
-  Chef::Log.debug("    #{cmd}")
-  shell_out!(cmd, {:returns => [0]})
 end
 
-def task_need_update?
-  @current_resource.command != @new_resource.command ||
-    @current_resource.user != @new_resource.user
+def compute_exec_action
+  # Splits path and arguments from given command
+  path, args = new_resource.command.match(/("[^"]+"|[^"\s]+)\s*(.*)/).captures
+  Windows::TaskSchedulerHelper.new_ole_hash :exec_action, 'Arguments' => args, 'Path' => path, 'WorkingDirectory' => new_resource.cwd
 end
 
-def load_task_hash(task_name)
-  Chef::Log.debug "looking for existing tasks"
+def compute_day_of_week_value(days)
+  case days
+    when String
+      days.upcase.split(',').inject(0) do |mask, day|
+        fail 'Invalid day attribute, valid values are: MON, TUE, WED, THU, FRI, SAT, SUN and *. Multiple values must be separated by a comma.' unless DAYS_VALUE.key? day
+        mask | DAYS_VALUE[day]
+      end
+    else
+      days
+  end
+end
 
-  # we use shell_out here instead of shell_out! because a failure implies that the task does not exist
-  output = shell_out("schtasks /Query /FO LIST /V /TN \"#{task_name}\"").stdout
-  if output.empty?
-    task = false
+def compute_logon_type
+  if Windows::TaskSchedulerHelper::SERVICE_USERS.include?(@new_resource.user.upcase)
+    :service_account
   else
-    task = Hash.new
+    fail 'Password is mandatory when using interactive mode or non-system user!' if new_resource.password.nil?
+    new_resource.interactive_enabled ? :interactive_token_or_password : :password
+  end
+end
 
-    output.split("\n").map! do |line|
-      line.split(":", 2).map! do |field|
-        field.strip
-      end
-    end.each do |field|
-      if field.kind_of? Array and field[0].respond_to? :to_sym
-        task[field[0].gsub(/\s+/,"").to_sym] = field[1]
-      end
+def compute_trigger
+  fail 'Days should only be used with weekly or monthly frequency' if new_resource.day && [:weekly, :monthly].include?(new_resource.frequency)
+
+  {}.tap do |trigger|
+    # Format StartBoundary if start_day or start_time is provided
+    trigger['StartBoundary'] = formated_start_boundary unless new_resource.start_day.nil? && new_resource.start_time.nil?
+
+    # Converts frequency to advanced_task trigger type
+    trigger['Type'] = TRIGGER_MAP[new_resource.frequency] || new_resource.frequency
+
+    case new_resource.frequency
+      when :daily then trigger['DaysInterval'] = new_resource.frequency_modifier
+      when :hourly then trigger['Repetition'] = { 'Interval' => "PT#{new_resource.frequency_modifier}H" }
+      when :minute then trigger['Repetition'] = { 'Interval' => "PT#{new_resource.frequency_modifier}M" }
+      when :on_logon then trigger['UserId'] = new_resource.user
+      when :weekly
+        trigger['WeeksInterval'] = new_resource.frequency_modifier
+        trigger['DaysOfWeek'] = compute_day_of_week_value
+      when :monthly
+        trigger['DaysInterval'] = new_resource.frequency_modifier
+        trigger['DaysOfMonth'] = new_resource.day
     end
   end
-
-  task
-end
-
-SYSTEM_USERS = ['NT AUTHORITY\SYSTEM', 'SYSTEM', 'NT AUTHORITY\LOCALSERVICE', 'NT AUTHORITY\NETWORKSERVICE']
-
-def validate_user_and_password
-  if @new_resource.user && use_password?
-    if @new_resource.password.nil?
-      Chef::Log.fatal "#{@new_resource.task_name}: Can't specify a non-system user without a password!"
-    end
-  end
-
-end
-
-def validate_interactive_setting
-  if @new_resource.interactive_enabled && password.nil?
-    Chef::Log.fatal "#{new_resource} did not provide a password when attempting to set interactive/non-interactive."
-  end
-end
-
-def validate_create_day
-  if not @new_resource.day then
-    return
-  end
-  if not [:weekly, :monthly].include?(@new_resource.frequency) then
-    raise "day attribute is only valid for tasks that run weekly or monthly"
-  end
-  if @new_resource.day.is_a? String then
-    days = @new_resource.day.split(",")
-    days.each do |day|
-      if not ["mon", "tue", "wed", "thu", "fri", "sat", "sun", "*"].include?(day.strip.downcase) then
-        raise "day attribute invalid.  Only valid values are: MON, TUE, WED, THU, FRI, SAT, SUN and *.  Multiple values must be separated by a comma."
-      end
-    end
-  end
-end
-
-def use_password?
-  @use_password ||= !SYSTEM_USERS.include?(@new_resource.user.upcase)
 end
