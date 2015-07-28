@@ -22,7 +22,6 @@
 # and not very useful
 actions :create, :delete, :run, :end, :change, :enable, :disable
 
-
 attribute :task_name, :kind_of => String, :name_attribute => true, :regex => [ /\A[^\/\:\*\?\<\>\|]+\z/ ]
 attribute :command, :kind_of => String
 attribute :cwd, :kind_of => String
@@ -44,8 +43,6 @@ attribute :frequency, :equal_to => [:minute,
 attribute :start_day, :kind_of => String, :default => nil
 attribute :start_time, :kind_of => String, :default => nil
 attribute :day, :kind_of => [ String, Integer ], :default => nil
-
-attr_accessor :exists, :status, :enabled
 
 def initialize(name, run_context=nil)
   super
