@@ -93,7 +93,6 @@ def create_or_update_task(chef_action)
 end
 
 def compute_exec_action
-  # Splits path and arguments from given command
   if new_resource.command.include? '\"'
     Chef::Log.warn "#{new_resource} has escaped command: `#{new_resource.command}'"
     if new_resource.unescape_command
@@ -101,6 +100,11 @@ def compute_exec_action
       Chef::Log.warn "#{new_resource} command has been unescaped automaticaly, use the `unescape_command' windows_task's attribute to control this behavior"
     end
   end
+  if new_resource.schtasks_compatibility && new_resource.command.include?('\'')
+    new_resource.command new_resource.command.gsub '\'', '"'
+    Chef::Log.warn "#{new_resource} command's single quotes have been replaced by double quotes automaticaly, use the `schtasks_compatibility' windows_task's attribute to control this behavior"
+  end
+  # Splits path and arguments from given command
   path, args = new_resource.command.match(/("[^"]+"|[^"\s]+)\s*(.*)/).captures
   Windows::TaskSchedulerHelper.new_ole_hash :exec_action, 'Arguments' => args, 'Path' => path, 'WorkingDirectory' => new_resource.cwd
 end
