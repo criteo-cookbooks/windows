@@ -78,13 +78,13 @@ def getCurrentAcl()
   else
     @current_resource.user(m[0][0])
     @current_resource.exists = true
-  end    
+  end
 end
 
-def setAcl()
-  shell_out!("#{@command} http add urlacl url=#{@new_resource.url} user=#{@new_resource.user}")
+def setAcl
+  shell_out!("#{@command} http add urlacl url=#{@new_resource.url} user=\"#{@new_resource.user}\"")
 end
 
-def deleteAcl()
+def deleteAcl
   shell_out!("#{@command} http delete urlacl url=#{@new_resource.url}")
 end
