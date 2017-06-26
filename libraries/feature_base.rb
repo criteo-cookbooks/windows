@@ -10,7 +10,7 @@ class Chef
           if installed?
             Chef::Log.debug("#{@new_resource} is already installed - nothing to do")
           else
-            converge_by "install windows feature #{@new_resource.featurename}" do
+            converge_by "install windows feature #{@new_resource.feature_name}" do
               install_feature(@new_resource.feature_name)
               Chef::Log.info("#{@new_resource} installed feature")
             end
