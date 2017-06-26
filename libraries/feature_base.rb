@@ -2,21 +2,27 @@ class Chef
   class Provider
     class WindowsFeature
       module Base
+        def whyrun_supported?
+          true
+        end
+
         def action_install
           if installed?
             Chef::Log.debug("#{@new_resource} is already installed - nothing to do")
           else
-            install_feature(@new_resource.feature_name)
-            @new_resource.updated_by_last_action(true)
-            Chef::Log.info("#{@new_resource} installed feature")
+            converge_by "install windows feature #{@new_resource.featurename}" do
+              install_feature(@new_resource.feature_name)
+              Chef::Log.info("#{@new_resource} installed feature")
+            end
           end
         end
 
         def action_remove
           if installed?
-            remove_feature(@new_resource.feature_name)
-            @new_resource.updated_by_last_action(true)
-            Chef::Log.info("#{@new_resource} removed")
+            converge_by "remove windows feature #{@new_resource.feature_name}" do
+              remove_feature(@new_resource.feature_name)
+              Chef::Log.info("#{@new_resource} removed")
+            end
           else
             Chef::Log.debug("#{@new_resource} feature does not exist - nothing to do")
           end
@@ -24,9 +30,10 @@ class Chef
 
         def action_delete
           if available?
-            delete_feature(@new_resource.feature_name)
-            @new_resource.updated_by_last_action(true)
-            Chef::Log.info("#{@new_resource} deleted")
+            converge_by "delete windows feature #{@new_resource.feature_name}" do
+              delete_feature(@new_resource.feature_name)
+              Chef::Log.info("#{@new_resource} deleted")
+            end
           else
             Chef::Log.debug("#{@new_resource} feature is not installed - nothing to do")
           end
