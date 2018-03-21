@@ -79,6 +79,11 @@ action :delete do
 end
 
 action_class do
+
+  def whyrun_supported?
+    true
+  end
+
   # @return [Array] features the user has requested to install which need installation
   def features_to_install
     @install ||= begin
