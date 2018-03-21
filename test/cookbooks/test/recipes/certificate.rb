@@ -1,8 +1,6 @@
 # We don't support reading the source from the cookbook yet.  So manually point us to
 # the correct place in the chef file cache.
 
-include_recipe 'windows::default'
-
 windows_certificate "#{Chef::Config[:file_cache_path]}/cookbooks/test/files/default/der-cert1.cer" do
   action :create
 end
@@ -12,6 +10,12 @@ windows_certificate "#{Chef::Config[:file_cache_path]}/cookbooks/test/files/defa
 end
 
 windows_certificate '2796bae63f1801e277261ba0d77770028f20eee4' do
+  action :delete
+end
+
+# this resource should always be "up to date"
+windows_certificate 'duplicate delete' do
+  source '2796bae63f1801e277261ba0d77770028f20eee4'
   action :delete
 end
 
@@ -34,4 +38,10 @@ windows_certificate_binding '444-appid' do
   store_name 'CA'
   port 444
   app_id '{00000000-0000-0000-0000-000000000000}'
+end
+
+windows_certificate_binding '443-hostname' do
+  cert_name 'ChefDummyCertForTest'
+  store_name 'CA'
+  address 'www.chef.io'
 end

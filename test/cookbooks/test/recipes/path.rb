@@ -1,5 +1,3 @@
-include_recipe 'windows::default'
-
 directory 'C:\path_test_path'
 
 windows_path 'C:\path_test_path' do
@@ -9,6 +7,12 @@ end
 directory 'c:\path_test_another_path'
 
 windows_path 'C:\path_test_another_path' do
+  action :add
+end
+
+directory 'c:/path_test_with_forward_slashes'
+
+windows_path 'c:/path_test_with_forward_slashes' do
   action :add
 end
 

@@ -1,9 +1,10 @@
 #
 # Author:: Paul Morton (<pmorton@biaprotect.com>)
-# Cookbook Name:: windows
+# Cookbook:: windows
 # Resource:: auto_run
 #
-# Copyright:: 2011, Business Intelligence Associates, Inc
+# Copyright:: 2011-2018, Business Intelligence Associates, Inc.
+# Copyright:: 2017-2018, Chef Software, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,9 +19,45 @@
 # limitations under the License.
 #
 
-actions :create, :remove
-default_action :create
+property :program_name, String, name_property: true
+property :path, String, coerce: proc { |x| x.tr('/', '\\') }
+property :args, String
+property :root, Symbol,
+         equal_to: %i(machine user),
+         default: :machine
 
-attribute :program, kind_of: String
-attribute :name, kind_of: String, name_attribute: true
-attribute :args, kind_of: String, default: ''
+alias_method :program, :path
+
+action :create do
+  data = "\"#{new_resource.path}\""
+  data << " #{new_resource.args}" if new_resource.args
+
+  registry_key registry_path do
+    values [{
+      name: new_resource.program_name,
+      type: :string,
+      data: data,
+    }]
+    action :create
+  end
+end
+
+action :remove do
+  registry_key registry_path do
+    values [{
+      name: new_resource.program_name,
+      type: :string,
+      data: '',
+    }]
+    action :delete
+  end
+end
+
+action_class do
+  # determine the full registry path based on the root property
+  # @return [String]
+  def registry_path
+    { machine: 'HKLM', user: 'HKCU' }[new_resource.root] + \
+      '\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run'
+  end
+end

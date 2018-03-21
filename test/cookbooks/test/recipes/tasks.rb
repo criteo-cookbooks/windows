@@ -1,5 +1,3 @@
-include_recipe 'windows::default'
-
 windows_task 'task_from_name' do
   command 'dir'
 end
@@ -13,12 +11,6 @@ windows_task 'create chef\nested task' do
   name 'chef\nested task'
   action :create
   command 'dir'
-end
-
-windows_task 'disable chef\nested task' do
-  name 'chef\nested task'
-  command 'dir /s'
-  action :change
 end
 
 windows_task 'create long running task loop' do
@@ -62,12 +54,30 @@ windows_task 'delete task delete_me' do
   action :delete
 end
 
-windows_task 'task_for_system' do
-  command 'dir'
+windows_task 'create task run_as_group' do
+  name 'run_as_group'
+  user 'BUILTIN\Users'
   run_level :highest
-  user 'vagrant'
-  password 'vagrant'
-  cwd ENV['TEMP']
+  password 'ignored'
+  action :create
+  command 'dir'
+  notifies :create, 'file[c:/notifytest.txt]', :immediately
+end
+
+windows_task 'delete task run_as_group' do
+  name 'run_as_group'
+  action :delete
+end
+
+# not everyone tests in vagrant
+if ENV['USERNAME'] == 'vagrant' || ENV['machine_user'] == 'vagrant'
+  windows_task 'task_for_system' do
+    command 'dir'
+    run_level :highest
+    user 'vagrant'
+    password 'vagrant'
+    cwd ENV['TEMP']
+  end
 end
 
 windows_task 'task_on_idle' do

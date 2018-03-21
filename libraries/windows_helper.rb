@@ -1,9 +1,9 @@
 #
 # Author:: Seth Chisamore (<schisamo@chef.io>)
-# Cookbook Name:: windows
-# Library:: helper
+# Cookbook:: windows
+# Library:: windows_helper
 #
-# Copyright:: 2011-2016, Chef Software, Inc.
+# Copyright:: 2011-2018, Chef Software, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -47,16 +47,6 @@ module Windows
       end
     end
 
-    # Create a feature provider dependent value object.
-    # mainly created becasue Windows Feature names are
-    # different based on whether dism.exe or servicemanagercmd.exe
-    # is used for installation
-    def value_for_feature_provider(provider_hash)
-      p = Chef::Platform.find_provider_for_node(node, :windows_feature)
-      key = p.to_s.downcase.split('::').last
-      provider_hash[key] || provider_hash[key.to_sym]
-    end
-
     # singleton instance of the Windows Version checker
     def win_version
       @win_version ||= Windows::Version.new
@@ -75,7 +65,7 @@ module Windows
     def cached_file(source, checksum = nil, windows_path = true)
       @installer_file_path ||= begin
 
-        if source =~ /^(file|ftp|http|https):\/\//
+        if source =~ %r{^(file|ftp|http|https):\/\/}
           uri = as_uri(source)
           cache_file_path = "#{Chef::Config[:file_cache_path]}/#{::File.basename(::URI.unescape(uri.path))}"
           Chef::Log.debug("Caching a copy of file #{source} at #{cache_file_path}")
@@ -122,6 +112,12 @@ module Windows
         installed_packages.merge!(extract_installed_packages_from_key(::Win32::Registry::HKEY_CURRENT_USER)) # rescue nil
         installed_packages
       end
+    end
+
+    # Returns an array
+    def to_array(var)
+      var = var.is_a?(Array) ? var : [var]
+      var.reject(&:nil?)
     end
 
     private
