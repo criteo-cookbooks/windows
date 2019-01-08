@@ -38,11 +38,10 @@ load_current_value do |desired|
     sddl_match = cmd_out.match(/SDDL:\s*(?<sddl>.+)/)
     if sddl_match
       sddl sddl_match['sddl']
-    else
-      # if no sddl, tries to find a single user
-      user_match = cmd_out.match(/User:\s*(?<user>.+)/)
-      user user_match['user']
     end
+    # if no sddl, tries to find a single user
+    user_match = cmd_out.match(/User:\s*(?<user>.+)/)
+    user user_match['user']
   else
     exists false
   end
@@ -65,7 +64,7 @@ action :create do
       current_resource.user.casecmp(new_resource.user) != 0
     )
 
-    if sddl_changed || user_changed
+    if sddl_changed || (user_changed && new_resource.sddl.nil?)
       converge_by("Changing #{new_resource.url}") do
         delete_acl
         apply_acl
