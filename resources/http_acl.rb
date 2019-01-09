@@ -41,7 +41,7 @@ load_current_value do |desired|
     end
     # if no sddl, tries to find a single user
     user_match = cmd_out.match(/User:\s*(?<user>.+)/)
-    user user_match['user']
+    user user_match['user'] if user_match
   else
     exists false
   end
