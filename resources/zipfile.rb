@@ -49,7 +49,7 @@ action :unzip do
                       new_resource.source
                     end
 
-  cache_file_path = win_friendly_path(cache_file_path)
+  cache_file_path = Chef::Util::PathHelper.cleanpath(cache_file_path)
 
   converge_by("unzip #{new_resource.source}") do
     ruby_block 'Unzipping' do
